@@ -108,7 +108,7 @@ func (w *WorkerNode) CompleteTask(task Task) {
 	reply := CompleteTaskResponse{}
 
 	call("Master.CompleteTask", &args, &reply)
-	if reply.Success == false {
+	if !reply.Success {
 		panic("Failed to complete task")
 	}
 }
