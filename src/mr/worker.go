@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"time"
 )
@@ -15,13 +16,14 @@ type KeyValue struct {
 	Value string
 }
 
-const num_workers = 1
+const TIMEOUT_SECONDS = 10
 
 // Enum for task type
 const (
 	MapTask    = "MapTask"
 	ReduceTask = "ReduceTask"
 	Wait       = "Wait"
+	Complete   = "Complete"
 )
 
 // use ihash(key) % NReduce to choose the reduce
@@ -36,11 +38,11 @@ func ihash(key string) int {
 func Worker(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
-	// Your worker implementation here.
-	for i := 0; i < num_workers; i++ {
-		worker := WorkerNode{i}
-		go worker.StartWorking(mapf, reducef)
-	}
+	i := rand.Intn(30)
+	fmt.Printf("Worker %v, started \n", i)
+
+	worker := WorkerNode{i}
+	worker.StartWorking(mapf, reducef)
 }
 
 type WorkerNode struct {
@@ -51,17 +53,26 @@ func (w *WorkerNode) StartWorking(mapf func(string, string) []KeyValue,
 	reducef func(string, []string) string) {
 
 	for {
-		fmt.Println("Worker {}, starting loop", w.WorkerId)
+		fmt.Printf("Worker %v, starting loop \n", w.WorkerId)
 
 		// Fetch task from master or hang
 		task := w.GetTask()
-		fmt.Println("Worker {}, got task {}", w.WorkerId, task.TaskId)
 
 		// Perform task
+		if task.TaskType == MapTask {
+			time.Sleep(time.Second)
+		} else if task.TaskType == ReduceTask {
+			time.Sleep(time.Second)
+		} else if task.TaskType == Complete {
+			fmt.Printf("Worker %v, completed all tasks \n", w.WorkerId)
+			return
+		} else {
+			panic("Invalid task type")
+		}
 
 		// Report task completion to master
 		w.CompleteTask(task)
-		fmt.Println("Worker {}, completed task {}", w.WorkerId, task.TaskId)
+		fmt.Printf("Worker %v, completed task %v \n", w.WorkerId, task.TaskId)
 	}
 }
 
@@ -82,6 +93,7 @@ func ReadFile(filename string) ([]byte, error) {
 }
 
 func (w *WorkerNode) GetTask() Task {
+	startTime := time.Now().Unix()
 	for {
 		reply := Task{}
 		request := GetTaskRequest{
@@ -90,9 +102,14 @@ func (w *WorkerNode) GetTask() Task {
 
 		call("Master.GetTask", &request, &reply)
 
+		fmt.Printf("Task obtained: Task type: %v \n", reply.TaskType)
+
 		if reply.TaskType == Wait {
 			time.Sleep(3 * time.Second)
-		} else if reply.TaskType == MapTask || reply.TaskType == ReduceTask {
+			if time.Now().Unix()-startTime > TIMEOUT_SECONDS {
+				panic("Timed out")
+			}
+		} else if reply.TaskType == MapTask || reply.TaskType == ReduceTask || reply.TaskType == Complete {
 			return reply
 		} else {
 			panic("Invalid task type")
@@ -101,6 +118,7 @@ func (w *WorkerNode) GetTask() Task {
 }
 
 func (w *WorkerNode) CompleteTask(task Task) {
+	fmt.Printf("Worker %v, completing task %v \n", w.WorkerId, task.TaskId)
 	args := CompleteTaskRequest{
 		WorkerId: w.WorkerId,
 		TaskId:   task.TaskId,
