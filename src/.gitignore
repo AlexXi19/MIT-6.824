@@ -11,3 +11,5 @@ main/mrsequential
 main/mrworker
 main/mr-out-0
 main/mr-tmp/
+main/mr-out
+main/tmp-reduce/*

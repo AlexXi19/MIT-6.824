@@ -16,8 +16,8 @@ type Master struct {
 	TaskQueue        []*Task
 	TaskPendingQueue []*Task
 	nReduce          int
+	nMap             int
 	completed        bool
-	taskId           int
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -59,6 +59,12 @@ func (m *Master) GetTask(args *GetTaskRequest, reply *Task) error {
 	return nil
 }
 
+func (m *Master) GetMetadata(args *GetMetadataRequest, reply *Metadata) error {
+	reply.NReduce = m.nReduce
+	reply.NMap = m.nMap
+	return nil
+}
+
 func (m *Master) removeTaskFromQueue(taskId int) (*Task, error) {
 	for i, task := range m.TaskPendingQueue {
 		if task.TaskId == taskId {
@@ -79,18 +85,19 @@ func (m *Master) CompleteTask(args *CompleteTaskRequest, reply *CompleteTaskResp
 
 	if len(m.TaskPendingQueue) == 0 && len(m.TaskQueue) == 0 {
 		if removedTask.TaskType == MapTask {
+			fmt.Println("Map tasks completed, starting reduce tasks.")
 			// Populate reduce tasks
 			for i := 0; i < m.nReduce; i++ {
 				m.TaskQueue = append(m.TaskQueue, &Task{
 					TaskType: ReduceTask,
 					Filename: "",
-					TaskId:   m.taskId,
+					TaskId:   i,
 				})
-				m.taskId++
 			}
 
 		} else if removedTask.TaskType == ReduceTask {
 			// All tasks completed
+			fmt.Println("All tasks completed!")
 			m.completed = true
 		} else {
 			panic("Invalid task type")
@@ -115,7 +122,6 @@ func (m *Master) checkTaskDeadline() {
 			m.removeTaskFromQueue(task.TaskId)
 		}
 	}
-
 }
 
 // main/mrmaster.go calls Done() periodically to find out
@@ -128,21 +134,26 @@ func (m *Master) Done() bool {
 // main/mrmaster.go calls this function.
 // nReduce is the number of reduce tasks to use.
 func MakeMaster(files []string, nReduce int) *Master {
-	m := Master{nReduce: nReduce}
-	taskCounter := 0
+	// Environment cleanup
+	os.RemoveAll("tmp-reduce")
+	os.Mkdir("tmp-reduce", 0777)
+	os.RemoveAll("mr-out")
+
+	m := Master{
+		nReduce: nReduce,
+		nMap:    len(files),
+	}
 
 	// Create map tasks
 	fmt.Println("Creating map tasks...")
-	for _, file := range files {
+	for i, file := range files {
 		task := Task{
 			TaskType: MapTask,
 			Filename: file,
-			TaskId:   taskCounter,
+			TaskId:   i,
 		}
 		m.TaskQueue = append(m.TaskQueue, &task)
-		taskCounter++
 	}
-	m.taskId = taskCounter
 
 	m.server()
 

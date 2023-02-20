@@ -23,6 +23,10 @@ type GetTaskRequest struct {
 	WorkerId int
 }
 
+type GetMetadataRequest struct {
+	WorkerId int
+}
+
 type CompleteTaskRequest struct {
 	WorkerId int
 	TaskId   int
@@ -37,6 +41,11 @@ type Task struct {
 	Filename string
 	TaskId   int
 	Start    int64
+}
+
+type Metadata struct {
+	NReduce int
+	NMap    int
 }
 
 // Add your RPC definitions here.
